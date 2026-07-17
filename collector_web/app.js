@@ -1,6 +1,6 @@
 // app.js
 // Puthusu Collector — dashboard-style live route view.
-
+const API = CONFIG.API_BASE_URL;
 const GEOFENCE_METERS = 45;
 const PING_INTERVAL_MS = 15000;
 const REFRESH_INTERVAL_MS = 10000;
@@ -42,17 +42,18 @@ function showScreen(id) {
 
 // ---------------- API helper ----------------
 async function api(path, options = {}) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${API}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(body || `Request failed (${res.status})`);
   }
+
   return res.status === 204 ? null : res.json();
 }
-
 // ---------------- Distance / geometry helpers ----------------
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -347,15 +348,15 @@ async function handleLogin() {
     currentCollector = collector;
     localStorage.setItem("collector", JSON.stringify(collector));
     startSession();
-  } catch (e) {
-    if (e instanceof TypeError) {
-      errorEl.textContent = `Can't reach the server at ${API_BASE_URL}. Check your network and config.js.`;
-    } else if (/no active collector/i.test(e.message)) {
-      errorEl.textContent = "No active collector found with that phone number. Check with your manager.";
-    } else {
-      errorEl.textContent = `Couldn't log in: ${e.message}`;
-    }
-  } finally {
+ } catch (e) {
+  if (e instanceof TypeError) {
+    errorEl.textContent = `Can't reach the server at ${API}. Check your network and config.js.`;
+  } else if (/no active collector/i.test(e.message)) {
+    errorEl.textContent = "No active collector found with that phone number. Check with your manager.";
+  } else {
+    errorEl.textContent = `Couldn't log in: ${e.message}`;
+  }
+} finally {
     btn.disabled = false;
     btn.textContent = "Start My Day";
   }

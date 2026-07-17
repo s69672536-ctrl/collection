@@ -23,6 +23,10 @@ app = FastAPI(
 # (specific origins) before deploying.
 app.add_middleware(
     CORSMiddleware,
+     allow_origins=[
+        "https://collector-web.onrender.com",
+        "https://admin-dashboard.onrender.com",
+    ],
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
