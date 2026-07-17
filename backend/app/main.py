@@ -37,6 +37,6 @@ app.include_router(collections.router)
 app.include_router(tracking.router)
 
 
-@app.get("/")
+@app.get("/admin")
 def root():
     return {"status": "ok", "docs": "/docs"}
