@@ -339,9 +339,12 @@
         <div class="form-group"><label>Phone</label><input id="custPhone" /></div>
         <div class="form-group"><label>Address</label><input id="custAddress" /></div>
         <div class="form-row">
-          <div class="form-group"><label>Latitude</label><input id="custLat" /></div>
-          <div class="form-group"><label>Longitude</label><input id="custLng" /></div>
+          <div class="form-group"><label>Latitude</label><input id="custLat" readonly /></div>
+          <div class="form-group"><label>Longitude</label><input id="custLng" readonly /></div>
         </div>
+        <p class="form-hint" style="font-size:12px;opacity:0.7;margin:-8px 0 8px;">
+          Set by clicking the map — click "Add" again to pick a different spot.
+        </p>
         <div class="form-row">
           <div class="form-group"><label>Amount Due</label><input id="custAmount" type="number" /></div>
           <div class="form-group"><label>Sequence</label><input id="custSequence" type="number" /></div>
@@ -354,6 +357,28 @@
       </form>
     </div>
   </div>
+
+  <div id="customerDetailsModal" class="modal-overlay">
+    <div class="modal glass">
+      <h2>Customer Details</h2>
+      <img id="detailImage" src="" alt="House photo" style="display:none;width:100%;border-radius:10px;margin-bottom:12px;object-fit:cover;max-height:180px;" />
+      <div class="form-group"><label>Name</label><p id="detailName">—</p></div>
+      <div class="form-group"><label>Phone</label><p id="detailPhone">—</p></div>
+      <div class="form-group"><label>Address</label><p id="detailAddress">—</p></div>
+      <div class="form-row">
+        <div class="form-group"><label>Amount Due</label><p id="detailAmount">—</p></div>
+        <div class="form-group"><label>Sequence</label><p id="detailSequence">—</p></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Status</label><p id="detailStatus">—</p></div>
+        <div class="form-group"><label>Permanent</label><p id="detailPermanent">—</p></div>
+      </div>
+      <div class="form-group"><label>Coordinates</label><p id="detailCoords">—</p></div>
+      <button type="button" class="ghost-btn full" id="closeCustomerDetailsModal">Close</button>
+    </div>
+  </div>
+
+
 
   <div id="collectorModal" class="modal-overlay">
     <div class="modal glass">

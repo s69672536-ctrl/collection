@@ -12,6 +12,7 @@
 let map;
 let startMarker, endMarker;
 let mode = "set-start"; // map is click-ready immediately: first click sets start, next sets end
+let pendingCustomerMarker = null; // temp marker shown while placing a new customer via map click
 let currentRoute = null;
 let customerMarkers = [];
 let routeLine = null;
@@ -21,6 +22,7 @@ let livePollTimer = null;
 let usingLocalStore = false;
 
 let editingCollectorId = null;
+let editingCustomerId = null;
 function $id(id) { return document.getElementById(id); }
 
 function isNetworkError(error) {
@@ -106,8 +108,25 @@ function onMapClick(e) {
     endMarker = L.marker([lat, lng]).addTo(map).bindPopup("End");
     $id("endLabel").value = `End: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     mode = "idle";
+  } else if (mode === "add-customer") {
+    placePendingCustomerMarker(lat, lng);
+    mode = "idle";
+    openCustomerModal(lat, lng);
+    return;
   }
   syncMapMarkers();
+}
+
+// ---------------- Pending "add customer" marker (click-to-place) ----------------
+function placePendingCustomerMarker(lat, lng) {
+  if (pendingCustomerMarker) map.removeLayer(pendingCustomerMarker);
+  pendingCustomerMarker = L.marker([lat, lng], { icon: numberedIcon("+", "#3B82F6") })
+    .addTo(map)
+    .bindPopup("New customer location");
+}
+
+function clearPendingCustomerMarker() {
+  if (pendingCustomerMarker) { map.removeLayer(pendingCustomerMarker); pendingCustomerMarker = null; }
 }
 
 function clearCustomerMapLayers() {
@@ -265,6 +284,36 @@ function statusDotHtml(status) {
   return `<span class="status-dot pending"><i class="fas fa-plus"></i></span>`;
 }
 
+// Opens a read-only details view for one customer (triggered by clicking their row)
+function showCustomerDetails(id) {
+  const c = store.customers.find((cust) => cust.id == id);
+  if (!c) return;
+
+  $id("detailName").textContent = c.name || "—";
+  $id("detailPhone").textContent = c.phone || "—";
+  $id("detailAddress").textContent = c.address || "—";
+  $id("detailAmount").textContent = formatCurrency(c.amount);
+  $id("detailSequence").textContent = c.sequence ?? "—";
+  $id("detailStatus").innerHTML = statusDotHtml(c.status);
+  $id("detailCoords").textContent =
+    c.lat != null && c.lng != null ? `${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}` : "—";
+  $id("detailPermanent").textContent = c.permanent ? "Yes" : "No";
+
+  const img = $id("detailImage");
+  if (c.house_image_path) {
+    img.src = `${API_BASE_URL}${c.house_image_path}`;
+    img.style.display = "block";
+  } else {
+    img.style.display = "none";
+  }
+
+  $id("customerDetailsModal").style.display = "flex";
+
+  if (map && c.lat != null && c.lng != null) {
+    map.setView([c.lat, c.lng], 16);
+  }
+}
+
 function renderCustomers(customers) {
   const tbody = $id("customerList");
   tbody.innerHTML = "";
@@ -279,12 +328,18 @@ function renderCustomers(customers) {
     .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
     .forEach((c) => {
       const tr = document.createElement("tr");
+      tr.className = "clickable-row";
+      tr.setAttribute("data-action", "view-customer");
+      tr.setAttribute("data-id", c.id);
       tr.innerHTML = `
         <td>${c.name}</td>
         <td>${formatCurrency(c.amount)}</td>
         <td>${c.sequence ?? ""}</td>
         <td>${statusDotHtml(c.status)}</td>
-        <td><button class="remove-btn" data-action="remove-customer" data-id="${c.id}" title="Remove"><i class="fas fa-trash"></i></button></td>
+        <td class="row-actions">
+          <button class="edit-btn" data-action="edit-customer" data-id="${c.id}" title="Edit"><i class="fas fa-pen"></i></button>
+          <button class="remove-btn" data-action="remove-customer" data-id="${c.id}" title="Remove"><i class="fas fa-trash"></i></button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -309,12 +364,18 @@ function renderPermanentCustomers() {
     .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
     .forEach((c) => {
       const tr = document.createElement("tr");
+      tr.className = "clickable-row";
+      tr.setAttribute("data-action", "view-customer");
+      tr.setAttribute("data-id", c.id);
       tr.innerHTML = `
         <td>${c.name}</td>
         <td>${formatCurrency(c.amount)}</td>
         <td>${c.sequence ?? ""}</td>
         <td>${statusDotHtml(c.status)}</td>
-        <td><button class="remove-btn" data-action="remove-customer" data-id="${c.id}" title="Remove"><i class="fas fa-trash"></i></button></td>
+        <td class="row-actions">
+          <button class="edit-btn" data-action="edit-customer" data-id="${c.id}" title="Edit"><i class="fas fa-pen"></i></button>
+          <button class="remove-btn" data-action="remove-customer" data-id="${c.id}" title="Remove"><i class="fas fa-trash"></i></button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -335,6 +396,7 @@ async function loadCustomers() {
       id: c.id, name: c.name, phone: c.phone, address: c.address,
       amount: c.default_amount || 0, sequence: c.sequence, status: c.status || "pending",
       lat: c.latitude, lng: c.longitude, permanent: !!c.permanent,
+      house_image_path: c.house_image_path || null,
     }));
     // Preserve any locally-added permanent customers alongside remote ones.
     const localPermanent = store.customers.filter((c) => c.permanent && !remoteMapped.some((r) => r.id === c.id));
@@ -357,10 +419,10 @@ async function removeCustomer(id) {
   const numericId = /^\d+$/.test(id) ? Number(id) : id;
   const customer = store.customers.find((c) => c.id == numericId);
 try {
-    if (!usingLocalStore) {
+    if (!usingLocalStore && customer && !customer.draft) {
       await api(`/customers/${numericId}`, { method: "DELETE" });
     } else {
-      throw new Error("local store — skip remote delete");
+      throw new Error("local-only — skip remote delete");
     }
   } catch (e) {
     // Fall through to local removal regardless of backend result.
@@ -524,39 +586,50 @@ function collectorNameById(id) {
 
 // ---------- NEW: View route on map ----------
 async function viewRouteOnMap(routeId) {
-  clearCustomerMapLayers();
+  let route;
   try {
-    // Fetch and draw customer stop markers
-    const customers = await api(`/routes/${routeId}/customers`);
-    const stops = (customers || [])
-      .filter((c) => c.latitude != null && c.longitude != null)
-      .sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+    route = await api(`/routes/${routeId}`);
+  } catch (e) {
+    addNotification("danger", `Could not load route: ${e.message}`);
+    return;
+  }
 
-    stops.forEach((c, idx) => {
-      const color = c.status === "collected" ? "#22C55E"
-        : (c.status === "skipped" || c.status === "absent") ? "#F59E0B"
-        : "#111827";
-      const marker = L.marker([c.latitude, c.longitude], { icon: numberedIcon(idx + 1, color) })
-        .addTo(map)
-        .bindPopup(`<b>${c.name}</b><br>${c.address || ""}<br>${formatCurrency(c.default_amount || 0)}`);
-      customerMarkers.push(marker);
-    });
+  // Reset any leftover builder state before loading this route in.
+  clearPendingCustomerMarker();
+  clearCustomerMapLayers();
+  clearLiveMarker();
+  if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+  if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
 
-    // Fetch and draw the road-following route line
+  currentRoute = { id: route.id, name: route.route_name };
+  usingLocalStore = false;
+  mode = "idle";
+  setRouteActionMode(true);
+
+  $id("routeName").value = route.route_name || "";
+  startMarker = L.marker([route.start_lat, route.start_lng]).addTo(map).bindPopup("Start");
+  endMarker = L.marker([route.end_lat, route.end_lng]).addTo(map).bindPopup("End");
+  $id("startLabel").value = `Start: ${route.start_lat.toFixed(5)}, ${route.start_lng.toFixed(5)}`;
+  $id("endLabel").value = `End: ${route.end_lat.toFixed(5)}, ${route.end_lng.toFixed(5)}`;
+
+  // Populates the customer table (editable/deletable from here on) and
+  // draws the straight-line preview between stops.
+  await loadCustomers();
+
+  // Overlay the actual road-following path on top of that preview, if available.
+  try {
     const data = await api(`/routes/${routeId}/geometry`);
     if (data && data.coordinates && data.coordinates.length > 1) {
       const latlngs = data.coordinates.map((c) => [c[0], c[1]]);
+      if (routeLine) map.removeLayer(routeLine);
       routeLine = L.polyline(latlngs, { color: "#2563EB", weight: 5, opacity: 0.9 }).addTo(map);
+      map.fitBounds(L.polyline(latlngs).getBounds(), { padding: [40, 40] });
     }
-
-    const bounds = stops.map((s) => [s.latitude, s.longitude]);
-    if (routeLine) bounds.push(...routeLine.getLatLngs().map((p) => [p.lat, p.lng]));
-    if (bounds.length) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] });
-
-    addNotification("info", `Route #${routeId} displayed on map.`);
   } catch (e) {
-    addNotification("danger", `Could not load route: ${e.message}`);
+    // No geometry yet (e.g. route has no customers) — the straight-line preview is enough.
   }
+
+  addNotification("info", `Route "${route.route_name}" loaded — add, edit, or remove its customers below.`);
 }
 
 function renderRoutesList() {
@@ -767,6 +840,39 @@ function recalcStats() {
 }
 
 // ---------------- Route builder actions ----------------
+async function flushDraftCustomers(createdRemotely) {
+  const drafts = store.customers.filter((c) => c.draft);
+  if (!drafts.length) return;
+
+  for (const draft of drafts) {
+    if (!createdRemotely) {
+      // Backend unreachable when the route itself was created — keep these
+      // as local-only customers instead of retrying a call we know will fail.
+      draft.draft = false;
+      continue;
+    }
+    try {
+      const payload = {
+        name: draft.name,
+        phone: draft.phone,
+        default_amount: draft.amount,
+        latitude: draft.lat,
+        longitude: draft.lng,
+      };
+      const saved = await api(`/routes/${currentRoute.id}/customers`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      draft.id = saved.id;
+      draft.sequence = saved.sequence;
+      draft.draft = false;
+    } catch (e) {
+      draft.draft = false;
+      addNotification("warning", `Couldn't save ${draft.name} to the server: ${e.message}`);
+    }
+  }
+}
+
 async function createRoute() {
   const routeName = $id("routeName").value.trim();
 
@@ -846,6 +952,8 @@ async function createRoute() {
       : " - no collector selected, so it is unassigned";
   addNotification("info", `Route "${routeName}" created${assignedNote}`);
 
+  await flushDraftCustomers(createdRemotely);
+
   await loadRoutes();
   await loadCustomers();
 }
@@ -864,12 +972,40 @@ function clearRoute() {
 }
 
 // ---------------- Customer / Collector modals ----------------
-function openCustomerModal() {
+function openCustomerModal(lat, lng) {
+  editingCustomerId = null;
   $id("customerModalTitle").textContent = "Add Customer";
-  ["custName", "custPhone", "custAddress", "custLat", "custLng", "custAmount", "custSequence", "custImage"]
+  ["custName", "custPhone", "custAddress", "custAmount", "custSequence", "custImage"]
     .forEach((id) => { $id(id).value = ""; });
+  $id("custLat").value = lat != null ? lat.toFixed(6) : "";
+  $id("custLng").value = lng != null ? lng.toFixed(6) : "";
+  $id("custLat").readOnly = true;
+  $id("custLng").readOnly = true;
   $id("custActive").checked = true;
   if ($id("custPermanent")) $id("custPermanent").checked = false;
+  $id("customerModal").style.display = "flex";
+}
+
+// Opens the same modal pre-filled for an existing customer, in edit mode.
+// Lat/Lng become editable text fields here (rather than map-click-only)
+// since the point already exists and may just need a small correction.
+function openEditCustomerModal(id) {
+  const c = store.customers.find((cust) => cust.id == id);
+  if (!c) return;
+  editingCustomerId = c.id;
+  $id("customerModalTitle").textContent = "Edit Customer";
+  $id("custName").value = c.name || "";
+  $id("custPhone").value = c.phone || "";
+  $id("custAddress").value = c.address || "";
+  $id("custLat").value = c.lat != null ? c.lat.toFixed(6) : "";
+  $id("custLng").value = c.lng != null ? c.lng.toFixed(6) : "";
+  $id("custLat").readOnly = false;
+  $id("custLng").readOnly = false;
+  $id("custAmount").value = c.amount ?? "";
+  $id("custSequence").value = c.sequence ?? "";
+  $id("custImage").value = "";
+  $id("custActive").checked = true;
+  if ($id("custPermanent")) $id("custPermanent").checked = !!c.permanent;
   $id("customerModal").style.display = "flex";
 }async function addCustomerFromModal() {
   const name = $id("custName").value.trim();
@@ -888,19 +1024,68 @@ function openCustomerModal() {
     alert("Please enter valid latitude and longitude.");
     return;
   }
-  if (!currentRoute) {
-    alert("Create or select a route before adding a customer.");
+
+  // ---- Editing an existing customer ----
+  if (editingCustomerId != null) {
+    const existing = store.customers.find((c) => c.id == editingCustomerId);
+    if (!existing) { editingCustomerId = null; $id("customerModal").style.display = "none"; return; }
+
+    if (!existing.draft && !usingLocalStore) {
+      try {
+        const payload = { name, phone, default_amount: amount, latitude: lat, longitude: lng };
+        const saved = await api(`/customers/${editingCustomerId}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        existing.sequence = saved.sequence;
+      } catch (e) {
+        alert(`Couldn't save changes: ${e.message}`);
+        return;
+      }
+    }
+
+    existing.name = name;
+    existing.phone = phone;
+    existing.address = address;
+    existing.amount = amount;
+    existing.lat = lat;
+    existing.lng = lng;
+    existing.permanent = permanent;
+
+    addNotification("info", `Customer updated: ${name}`);
+    editingCustomerId = null;
+    $id("customerModal").style.display = "none";
+    renderCustomers(store.customers.filter((c) => !c.permanent));
+    renderPermanentCustomers();
+    syncMapMarkers();
+    recalcStats();
     return;
   }
 
+  // ---- Adding a new customer ----
   const customer = {
-    id: Date.now(),
+    id: currentRoute ? Date.now() : `draft-${Date.now()}`,
     name, phone, address, amount, sequence,
     status: "pending",
     permanent,
     lat, lng,
+    draft: !currentRoute,
     addedAt: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
   };
+
+  // No route yet — keep this customer locally. It's saved to the backend
+  // automatically the moment "Create Route" is clicked (see flushDraftCustomers).
+  if (!currentRoute) {
+    store.customers.push(customer);
+    addNotification("info", `${name} added — will be saved once the route is created`);
+    $id("customerModal").style.display = "none";
+    clearPendingCustomerMarker();
+    renderCustomers(store.customers.filter((c) => !c.permanent));
+    renderPermanentCustomers();
+    syncMapMarkers();
+    recalcStats();
+    return;
+  }
 
   try {
     const payload = {
@@ -931,6 +1116,7 @@ function openCustomerModal() {
 
   addNotification("info", `New customer added: ${name}${permanent ? " (Permanent)" : ""}`);
   $id("customerModal").style.display = "none";
+  clearPendingCustomerMarker();
   await loadCustomers(); // refresh UI
 }
 // ---------------- Event bindings ----------------
@@ -949,9 +1135,19 @@ document.addEventListener("DOMContentLoaded", () => {
   $id("createRouteBtn").addEventListener("click", createRoute);
   $id("clearRouteBtn").addEventListener("click", clearRoute);
 
-  $id("addCustomerBtn").addEventListener("click", openCustomerModal);
+  $id("addCustomerBtn").addEventListener("click", () => {
+    mode = "add-customer";
+    addNotification("info", "Click a location on the map to place the new customer.");
+  });
   $id("customerForm").addEventListener("submit", (e) => { e.preventDefault(); addCustomerFromModal(); });
-  $id("closeCustomerModal").addEventListener("click", () => { $id("customerModal").style.display = "none"; });
+  $id("closeCustomerModal").addEventListener("click", () => {
+    $id("customerModal").style.display = "none";
+    clearPendingCustomerMarker();
+    editingCustomerId = null;
+  });
+  $id("closeCustomerDetailsModal").addEventListener("click", () => {
+    $id("customerDetailsModal").style.display = "none";
+  });
 
   $id("addCollectorBtn").addEventListener("click", () => {
     $id("collectorModalTitle").textContent = "Add Collector";
@@ -993,6 +1189,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const action = btn.getAttribute("data-action");
     const id = btn.getAttribute("data-id");
     if (action === "remove-customer") removeCustomer(id);
+    else if (action === "view-customer") showCustomerDetails(id);
+    else if (action === "edit-customer") openEditCustomerModal(id);
     else if (action === "remove-collector") removeCollector(id);
     else if (action === "remove-route") removeRoute(id);
     else if (action === "assign-today-route") assignRouteToday(Number(id));

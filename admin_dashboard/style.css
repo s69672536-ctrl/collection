@@ -488,6 +488,25 @@ body {
   height: 20px;
   font-size: 10px;
 }
+.edit-btn {
+  background: #EFF6FF;
+  color: #2563EB;
+  border: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.15s;
+}
+.edit-btn:hover { background: #2563EB; color: #fff; }
+.row-actions {
+  display: flex;
+  gap: 6px;
+}
 .collector-card { position: relative; }
 
 .btn-row { display: flex; gap: 8px; margin-top: 4px; }
@@ -870,4 +889,10 @@ body {
   0%   { transform: scale(0.6); opacity: 0.9; }
   70%  { transform: scale(1.8); opacity: 0; }
   100% { transform: scale(1.8); opacity: 0; }
+}
+.clickable-row {
+  cursor: pointer;
+}
+.clickable-row:hover {
+  background: rgba(59, 130, 246, 0.08);
 }

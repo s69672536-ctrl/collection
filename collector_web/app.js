@@ -522,15 +522,37 @@ function renderStops() {
       `<div class="stop-meta-right"><span class="stop-badge-moving">${escapeHtml(statusLabel)}</span></div>` :
       `<div class="stop-chevron"></div>`;
 
+    const photoHtml = stop.house_image_path ?
+      `<img class="stop-contact-photo" src="${API}${stop.house_image_path}" alt="House photo" />` : "";
+    const phoneHtml = stop.phone ?
+      `<a href="tel:${escapeHtml(stop.phone)}"><i class="fas fa-phone"></i> ${escapeHtml(stop.phone)}</a>` :
+      `<span class="stop-contact-none"><i class="fas fa-phone"></i> No phone on file</span>`;
+
     li.innerHTML = `
       <div class="stop-index">${iconContent}</div>
       <div class="stop-info">
         <div class="stop-name">${escapeHtml(stop.name)}</div>
         <div class="stop-address">${escapeHtml(stop.address || stop.phone || "")}</div>
         <div class="stop-status ${statusClass}">${escapeHtml(statusLabel)}${timeLabel ? " • " + timeLabel : ""}</div>
+        <div class="stop-contact">
+          ${photoHtml}
+          <div class="stop-contact-info">
+            ${phoneHtml}
+            <span class="stop-contact-amount">${formatCurrency(stop.default_amount)} due</span>
+          </div>
+        </div>
       </div>
       ${rightMeta}
     `;
+
+    // Tap anywhere on the row (except the phone link) to reveal contact
+    // details — hover alone won't fire on a phone/touch screen, and
+    // collectors use this app on their phones in the field.
+    li.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return;
+      li.classList.toggle("show-contact");
+    });
+
     list.appendChild(li);
   });
 }

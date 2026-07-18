@@ -349,7 +349,7 @@ button { font-family: inherit; }
   padding: 10px;
   border-radius: 12px;
   margin-bottom: 4px;
-  cursor: default;
+  cursor: pointer;
 }
 .stop-item.current { background: #1B2B52; border: 1px solid #2A4A8F; }
 .stop-item:not(.current):hover { background: #161C30; }
@@ -374,6 +374,36 @@ button { font-family: inherit; }
 .stop-status.current { color: #60A5FA; }
 .stop-status.skipped, .stop-status.absent { color: #FBBF24; }
 .stop-status.pending { color: #64708A; }
+
+/* Contact details — hidden by default, revealed on hover (desktop) or tap
+   (mobile, since this app is used on a collector's phone in the field). */
+.stop-contact {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #232B45;
+}
+.stop-item:hover .stop-contact,
+.stop-item.show-contact .stop-contact {
+  display: flex;
+}
+.stop-contact-photo {
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.stop-contact-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.stop-contact-info a,
+.stop-contact-none {
+  font-size: 12px;
+  color: #60A5FA;
+  text-decoration: none;
+}
+.stop-contact-none { color: #64708A; }
+.stop-contact-amount { font-size: 11px; color: #8B95A8; }
 
 .stop-meta-right { text-align: right; flex-shrink: 0; }
 .stop-badge-moving {
