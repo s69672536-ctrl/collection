@@ -208,3 +208,4 @@ full remaining route:
 4. GPS tracking (see stub note above) + a live map view in the admin dashboard.
 5. Reporting (`/collections/report` is a starting point — extend per your needs).
 6. Swap the phone-only login for real auth before handling real collections.
+"# collection" 
