@@ -266,7 +266,7 @@ function updateNextStopCard() {
 
 // ---------------- API helper ----------------
 async function api(path, options = {}) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${CONFIG.API_BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
