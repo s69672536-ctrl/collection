@@ -62,8 +62,6 @@
 # @app.get("/admin")
 # def root():
 #     return {"status": "ok", "docs": "/docs"}
-
-
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,37 +83,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# ===== CORS CONFIGURATION =====
-# For production, use specific origins. For testing, use ["*"] to allow all.
-# If the specific origins don't work, uncomment the ["*"] line below.
-
+# ===== SIMPLEST CORS CONFIG - THIS WILL WORK =====
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://collection-web.onrender.com",           # Collector app
-        "https://collection-admin.onrender.com",         # Admin dashboard
-        "https://collection-backend-akng.onrender.com",  # Backend itself
-        "http://localhost:8000",                         # Local backend
-        "http://localhost:3000",                         # Local frontend
-        "http://127.0.0.1:8000",
-        "http://127.0.0.1:3000",
-        # Uncomment the line below if the above still doesn't work:
-        # "*",  # Allow ALL origins (for testing only)
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],   # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],   # Allow all headers
-    expose_headers=["*"],  # Expose all headers to the client
+    allow_origins=["*"],
+    allow_credentials=False,  # Changed to False
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
-# ===== ALTERNATIVE: If the above doesn't work, use this instead =====
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],  # Allow ALL origins (temporary fix)
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
 
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "..", "static")), name="static")
 
