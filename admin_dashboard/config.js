@@ -10,5 +10,5 @@
 // const API_BASE_URL = "https://collection-wdqa.onrender.com";
 
 // const API_BASE_URL = "http://localhost:8000";
-const API_BASE_URL = "https://collection-backend-11mf.onrender.com";
+const API_BASE_URL = "https://collection-backend-akng.onrender.com";
 const CONFIG = { API_BASE_URL };
